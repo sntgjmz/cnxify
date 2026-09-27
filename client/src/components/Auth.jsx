@@ -28,7 +28,10 @@ export default function Auth({ setToken }) {
                 body: JSON.stringify(payload)
             });
             
-            const data = await response.json();
+            const contentType = response.headers.get('content-type') || '';
+            const data = contentType.includes('application/json')
+                ? await response.json()
+                : { error: `Server returned ${response.status}. Check that VITE_API_URL points to the backend Railway domain.` };
 
             if (!response.ok) {
                 throw new Error(data.error || 'Something went wrong');
