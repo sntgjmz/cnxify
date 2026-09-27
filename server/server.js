@@ -57,6 +57,7 @@ function requireAdmin(req, res, next) { return req.user.role === 'ADMIN' ? next(
 const isOneOf = (value, options) => typeof value === 'string' && options.includes(value);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/', (_req, res) => res.json({ ok: true, service: 'CNXify API', health: '/api/health' }));
 app.post('/api/auth/register', async (req, res) => {
     try {
         const email = String(req.body.email || '').trim().toLowerCase();
