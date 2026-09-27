@@ -16,7 +16,7 @@ const PORT = Number(process.env.PORT) || 5000;
 const jwtSecret = process.env.JWT_SECRET;
 const origins = (process.env.CLIENT_ORIGINS || 'http://localhost:5173').split(',').map((value) => value.trim()).filter(Boolean);
 const adminEmails = new Set((process.env.ADMIN_EMAILS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean));
-if (!jwtSecret || jwtSecret === 'replace-with-a-long-random-secret') throw new Error('JWT_SECRET must be configured with a strong unique value.');
+if (!jwtSecret || jwtSecret === '083L2*=%GE+csekgrXbgop#2[xj$I3r@z') throw new Error('JWT_SECRET must be configured with a strong unique value.');
 
 const corsOptions = {
     origin(origin, callback) {
