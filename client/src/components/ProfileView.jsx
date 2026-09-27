@@ -6,6 +6,7 @@ import { apiUrl } from '../lib/api';
 export default function ProfileView({ userId, token, onBack, onPlayPlaylist, nowListening, isCurrentUser }) {
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [isFollowing, setIsFollowing] = useState(false);
     const [isUpdatingFollow, setIsUpdatingFollow] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -15,19 +16,27 @@ export default function ProfileView({ userId, token, onBack, onPlayPlaylist, now
     const [saveError, setSaveError] = useState('');
 
     useEffect(() => {
+        setLoading(true);
+        setLoadError('');
         fetch(apiUrl(`/api/users/${userId}/profile`), {
             headers: { 'Authorization': `Bearer ${token}` }
         })
-        .then(res => res.json())
+        .then(async (res) => {
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Unable to load profile.');
+            return data;
+        })
         .then(data => {
-            setProfile(data);
+            setProfile({ ...data, playlists: data.playlists || [] });
             setIsFollowing(Boolean(data.is_following));
             setUsername(data.username);
             setShowActivity(data.show_listening_activity !== false);
             setLoading(false);
         })
-        .catch(err => {
-            console.error('Error fetching profile:', err);
+        .catch((error) => {
+            console.error('Error fetching profile:', error);
+            setProfile(null);
+            setLoadError(error.message || 'Unable to load profile.');
             setLoading(false);
         });
     }, [userId, token]);
@@ -37,7 +46,7 @@ export default function ProfileView({ userId, token, onBack, onPlayPlaylist, now
     }
 
     if (!profile) {
-        return <div className="p-8 text-red-400">Profile not found.</div>;
+        return <div className="rounded-2xl border border-red-400/30 bg-red-950/30 p-6 text-red-200"><h2 className="font-bold">Profile unavailable</h2><p className="mt-2 text-sm">{loadError || 'Profile not found.'}</p></div>;
     }
 
     const toggleFollow = async () => {
