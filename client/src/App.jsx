@@ -1,7 +1,7 @@
 // client/src/App.jsx
 import { useEffect, useState, useContext } from 'react';
 import { io } from 'socket.io-client';
-import { ArrowLeft, Disc, Heart, Play, Search, UploadCloud, UserCheck, UserPlus } from 'lucide-react';
+import { ArrowLeft, Disc, Heart, ListMusic, Play, Search, UploadCloud, UserCheck, UserPlus, UserRound } from 'lucide-react';
 import { AudioProvider } from './context/AudioContext';
 import { AudioContext } from './context/audio-state';
 import FullScreenPlayer from './components/FullScreenPlayer';
@@ -17,6 +17,14 @@ import ProfileView from './components/ProfileView';
 import { API_URL, apiUrl } from './lib/api';
 
 const socket = io(API_URL, { autoConnect: false });
+
+function TypeBadge({ label }) {
+    return <span className="ml-auto shrink-0 rounded-full bg-[#f6c6d1]/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#f6c6d1]">{label}</span>;
+}
+
+function SearchResults({ title, icon, empty, items, renderItem }) {
+    return <section><h3 className="mb-3 flex items-center gap-2 text-sm font-black text-white">{icon} {title}</h3>{items.length ? <div className="space-y-2">{items.map(renderItem)}</div> : <p className="rounded-xl border border-dashed border-white/10 px-4 py-3 text-sm text-gray-500">{empty}</p>}</section>;
+}
 
 function MainDashboard({ setToken }) {
 
@@ -47,6 +55,7 @@ function MainDashboard({ setToken }) {
     const [selectedPlaylist, setSelectedPlaylist] = useState(null);
     const [playlistSongs, setPlaylistSongs] = useState([]);
     const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
+    const [searchResults, setSearchResults] = useState({ songs: [], playlists: [], profiles: [] });
 
     const token = localStorage.getItem('cnxify_token');
 
@@ -127,6 +136,19 @@ function MainDashboard({ setToken }) {
             .then((data) => setIsFollowingArtist(Boolean(data.following)))
             .catch(() => setIsFollowingArtist(false));
     }, [selectedArtist, token]);
+
+    useEffect(() => {
+        const query = searchQuery.trim();
+        if (!query || !token) { setSearchResults({ songs: [], playlists: [], profiles: [] }); return undefined; }
+        const timer = setTimeout(async () => {
+            try {
+                const response = await fetch(apiUrl(`/api/search?q=${encodeURIComponent(query)}`), { headers: { Authorization: `Bearer ${token}` } });
+                const data = await response.json();
+                if (response.ok) setSearchResults(data);
+            } catch (error) { console.error('Search failed:', error); }
+        }, 220);
+        return () => clearTimeout(timer);
+    }, [searchQuery, token]);
 
     const handleLogout = () => {
         localStorage.removeItem('cnxify_token');
@@ -367,14 +389,20 @@ function MainDashboard({ setToken }) {
 
                     {currentView === 'search' && (
                         <div className="w-full">
-                            <h2 className="text-3xl font-black mb-6 tracking-tight">Search</h2>
-                            {searchQuery.trim() ? (
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#f6c6d1]">Explore CNXify</p>
+                            <h2 className="mt-1 text-3xl font-black tracking-tight">Search results</h2>
+                            {searchQuery.trim() && <div className="mt-7 space-y-8">
+                                <SearchResults title="Songs" icon={<Play size={15} fill="currentColor" />} empty="No matching songs." items={searchResults.songs} renderItem={(song) => <button key={song.id} onClick={() => playSong(song)} className="flex w-full items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left hover:bg-white/10"><span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#f6c6d1]/15 text-[#f6c6d1]">{song.cover_path ? <img src={apiUrl(song.cover_path)} alt="" className="h-full w-full object-cover" /> : <Play size={16} fill="currentColor" />}</span><span className="min-w-0"><b className="block truncate">{song.title}</b><small className="block truncate text-gray-400">{song.artist} · {song.album}</small></span><TypeBadge label="Song" /></button>} />
+                                <SearchResults title="Playlists" icon={<ListMusic size={15} />} empty="No public playlists found." items={searchResults.playlists} renderItem={(playlist) => <button key={playlist.id} onClick={() => openPlaylist(playlist)} className="flex w-full items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left hover:bg-white/10"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#f6c6d1]/15 text-[#f6c6d1]"><ListMusic size={20} /></span><span className="min-w-0"><b className="block truncate">{playlist.title}</b><small className="block truncate text-gray-400">{playlist.description || 'Public playlist'}</small></span><TypeBadge label="Playlist" /></button>} />
+                                <SearchResults title="Colleagues" icon={<UserRound size={15} />} empty="No colleague profiles found." items={searchResults.profiles} renderItem={(profile) => <button key={profile.id} onClick={() => openProfile(profile.id)} className="flex w-full items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left hover:bg-white/10"><span className="grid h-11 w-11 place-items-center overflow-hidden rounded-full bg-[#f6c6d1]/15 text-[#f6c6d1]">{profile.avatar_path ? <img src={apiUrl(profile.avatar_path)} alt="" className="h-full w-full object-cover" /> : <UserRound size={19} />}</span><b className="truncate">{profile.username}</b><TypeBadge label="Profile" /></button>} />
+                            </div>}
+                            {searchResults.__legacy ? (
                                 <div className="grid grid-cols-1 gap-3">
                                     {librarySongs.filter((song) => `${song.title} ${song.artist} ${song.album}`.toLowerCase().includes(searchQuery.toLowerCase())).map((song) => (
                                         <button key={song.id} onClick={() => playSong(song)} className="text-left bg-[#342742] hover:bg-[#3e2f4f] rounded-xl p-4 flex items-center gap-4"><span className="font-bold">{song.title}</span><span className="text-sm text-gray-400">{song.artist} · {song.album}</span></button>
                                     ))}
                                 </div>
-                            ) : <p className="text-gray-400 text-sm">Start typing above to search your library.</p>}
+                            ) : null}
                         </div>
                     )}
 
@@ -416,8 +444,8 @@ function MainDashboard({ setToken }) {
                     )}
 
                     {currentView === 'liked' && (
-                        <div className="w-full">
-                            <div className="mb-8 flex items-end gap-4"><div className="grid h-20 w-20 place-items-center rounded-2xl bg-gradient-to-br from-[#f6c6d1] to-[#8b5ba0] text-[#281a30]"><Heart size={34} fill="currentColor" /></div><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#f6c6d1]">Your collection</p><h2 className="text-3xl font-black tracking-tight">Liked Songs</h2><p className="mt-1 text-sm text-gray-400">{likedSongs.length} saved {likedSongs.length === 1 ? 'song' : 'songs'}</p></div></div>
+                        <div className="w-full pt-6">
+                            <div className="mb-9 flex items-end gap-5 rounded-3xl border border-white/10 bg-gradient-to-r from-[#382743] to-[#211827] p-6 shadow-xl"><div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#f6c6d1] to-[#8b5ba0] text-[#281a30] shadow-lg"><Heart size={34} fill="currentColor" /></div><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#f6c6d1]">Your collection</p><h2 className="mt-1 text-3xl font-black tracking-tight">Liked Songs</h2><p className="mt-1 text-sm text-gray-400">{likedSongs.length} saved {likedSongs.length === 1 ? 'song' : 'songs'}</p></div></div>
                             {libraryError && <p className="mb-5 rounded-xl border border-red-400/30 bg-red-950/30 p-3 text-sm text-red-200">{libraryError}</p>}
                             {likedSongs.length === 0 ? <p className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-8 text-sm text-gray-400">No liked songs yet. Use the heart beside any album track to save it here.</p> : <div className="space-y-2">{likedSongs.map((song, index) => <div key={song.id} className="group grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-4 py-3 hover:bg-white/5"><span className="text-sm text-gray-500">{index + 1}</span><button onClick={() => playSong(song)} className="min-w-0 text-left"><p className="truncate text-sm font-bold text-white">{song.title}</p><p className="truncate text-xs text-gray-400">{song.artist} · {song.album}</p></button><button onClick={() => toggleLikedSong(song)} aria-label={`Remove ${song.title} from liked songs`} className="p-2 text-[#f6c6d1] hover:text-white"><Heart size={18} fill="currentColor" /></button></div>)}</div>}
                         </div>
