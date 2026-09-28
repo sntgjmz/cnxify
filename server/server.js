@@ -151,7 +151,7 @@ app.get('/api/search', authenticateToken, async (req, res) => {
     try {
         const [songs, playlists, profiles] = await Promise.all([
             pool.query('SELECT id, title, artist, album, file_path, cover_path FROM songs WHERE title ILIKE $1 OR artist ILIKE $1 OR album ILIKE $1 ORDER BY created_at DESC LIMIT 20', [pattern]),
-            pool.query('SELECT id, title, description, user_id, is_public FROM playlists WHERE is_public = true AND (title ILIKE $1 OR description ILIKE $1) ORDER BY created_at DESC LIMIT 20', [pattern]),
+            pool.query('SELECT id, title, description, cover_path, user_id, is_public FROM playlists WHERE is_public = true AND (title ILIKE $1 OR description ILIKE $1) ORDER BY created_at DESC LIMIT 20', [pattern]),
             pool.query('SELECT id, username, avatar_path FROM users WHERE status = \'APPROVED\' AND username ILIKE $1 ORDER BY username LIMIT 20', [pattern]),
         ]);
         return res.json({ songs: songs.rows, playlists: playlists.rows, profiles: profiles.rows });
@@ -160,10 +160,10 @@ app.get('/api/search', authenticateToken, async (req, res) => {
 app.get('/api/users/directory', authenticateToken, async (_req, res) => {
     try { return res.json((await pool.query("SELECT id, username, avatar_path, role FROM users WHERE status = 'APPROVED' ORDER BY username ASC")).rows); } catch { return res.status(500).json({ error: 'Unable to load colleague directory.' }); }
 });
-app.post('/api/playlists', authenticateToken, async (req, res) => {
+app.post('/api/playlists', authenticateToken, (req, res, next) => upload.single('cover')(req, res, (error) => error ? res.status(400).json({ error: error.message }) : next()), async (req, res) => {
     const title = String(req.body.title || '').trim(); if (!title || title.length > 100) return res.status(400).json({ error: 'Playlist title must be between 1 and 100 characters.' });
     const description = String(req.body.description || '').trim();
-    try { return res.status(201).json((await pool.query('INSERT INTO playlists (title, description, user_id, is_public) VALUES ($1, $2, $3, $4) RETURNING *', [title, description || null, req.user.id, Boolean(req.body.is_public)])).rows[0]); } catch { return res.status(500).json({ error: 'Unable to create playlist.' }); }
+    try { const coverPath = req.file ? `/uploads/covers/${req.file.filename}` : null; return res.status(201).json((await pool.query('INSERT INTO playlists (title, description, user_id, is_public, cover_path) VALUES ($1, $2, $3, $4, $5) RETURNING *', [title, description || null, req.user.id, req.body.is_public === 'true' || req.body.is_public === true, coverPath])).rows[0]); } catch { return res.status(500).json({ error: 'Unable to create playlist.' }); }
 });
 app.put('/api/playlists/:playlistId', authenticateToken, (req, res, next) => upload.single('cover')(req, res, (error) => error ? res.status(400).json({ error: error.message }) : next()), async (req, res) => {
     const title = String(req.body.title || '').trim(); const description = String(req.body.description || '').trim();

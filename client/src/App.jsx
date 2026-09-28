@@ -1,7 +1,7 @@
 // client/src/App.jsx
 import { useEffect, useState, useContext } from 'react';
 import { io } from 'socket.io-client';
-import { ArrowLeft, Disc, Heart, ListMusic, ListPlus, LogOut, Play, Search, UploadCloud, UserCheck, UserPlus, UserRound } from 'lucide-react';
+import { ArrowLeft, Disc, Edit3, Heart, ListMusic, ListPlus, LogOut, MessageSquare, Play, Search, Trash2, UploadCloud, UserCheck, UserPlus, UserRound } from 'lucide-react';
 import { AudioProvider } from './context/AudioContext';
 import { AudioContext } from './context/audio-state';
 import FullScreenPlayer from './components/FullScreenPlayer';
@@ -34,6 +34,7 @@ function MainDashboard({ setToken }) {
     const [onlineCount, setOnlineCount] = useState(0);
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
     const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false);
+    const [playlistToEdit, setPlaylistToEdit] = useState(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false); 
     const [currentView, setCurrentView] = useState('home');
     const [userRole, setUserRole] = useState('USER');
@@ -173,8 +174,24 @@ function MainDashboard({ setToken }) {
     };
 
     const handlePlaylistCreated = (newPlaylist) => {
-        setMyPlaylists([newPlaylist, ...myPlaylists]);
+        setMyPlaylists((playlists) => playlists.some((playlist) => String(playlist.id) === String(newPlaylist.id)) ? playlists : [newPlaylist, ...playlists]);
         setCurrentView('library'); 
+    };
+
+    const handlePlaylistUpdated = (updatedPlaylist) => {
+        setMyPlaylists((playlists) => playlists.map((playlist) => String(playlist.id) === String(updatedPlaylist.id) ? updatedPlaylist : playlist));
+        setSelectedPlaylist((playlist) => playlist && String(playlist.id) === String(updatedPlaylist.id) ? updatedPlaylist : playlist);
+    };
+
+    const deletePlaylist = async (playlist) => {
+        if (!window.confirm(`Delete “${playlist.title}”? This cannot be undone.`)) return;
+        try {
+            const response = await fetch(apiUrl(`/api/playlists/${playlist.id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Unable to delete playlist.');
+            setMyPlaylists((playlists) => playlists.filter((item) => String(item.id) !== String(playlist.id)));
+            if (selectedPlaylist && String(selectedPlaylist.id) === String(playlist.id)) { setSelectedPlaylist(null); setPlaylistSongs([]); setCurrentView('library'); }
+        } catch (error) { setLibraryError(error.message); }
     };
 
     const handleUploadComplete = (newSong) => {
@@ -318,6 +335,8 @@ function MainDashboard({ setToken }) {
         <div className="min-h-screen bg-[#17121b] text-white font-sans flex">
             <Sidebar 
                 userRole={userRole} 
+                onlineCount={onlineCount}
+                onOpenUpload={() => setIsUploadModalOpen(true)}
                 currentView={currentView} 
                 onNavigate={(view) => {
                     setCurrentView(view);
@@ -351,18 +370,8 @@ function MainDashboard({ setToken }) {
                         </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                        <div className="hidden md:flex text-xs font-semibold text-[#f2cdd6] bg-[#3b2d47] px-3.5 py-1.5 rounded-full items-center gap-2 border border-[#4a395c]">
-                            <span className="w-2 h-2 rounded-full bg-[#f2cdd6] animate-pulse"></span> {onlineCount} Online
-                        </div>
-                        
-                        {/* ADMIN ONLY: Upload Button */}
-                        {userRole === 'ADMIN' && (
-                            <button onClick={() => setIsUploadModalOpen(true)} className="flex items-center gap-2 text-xs font-bold text-[#f2cdd6] hover:text-white transition-colors">
-                                <UploadCloud size={16} /> Upload
-                            </button>
-                        )}
-                        <NotificationMenu token={token} />
-                        <button onClick={() => setIsFeedbackOpen(true)} className="hidden sm:block rounded-full px-3 py-2 text-xs font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors">Feedback</button>
+                        <div className="rounded-full border border-white/10 bg-white/5 p-0.5"><NotificationMenu token={token} /></div>
+                        <button onClick={() => setIsFeedbackOpen(true)} className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-bold text-gray-300 transition hover:border-[#f6c6d1]/50 hover:bg-[#f6c6d1] hover:text-[#281a30] sm:inline-flex"><MessageSquare size={15} /> Feedback</button>
                         <button onClick={handleLogout} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-bold text-gray-300 transition hover:border-[#f6c6d1]/50 hover:bg-[#f6c6d1] hover:text-[#281a30]"><LogOut size={15} /> <span className="hidden lg:inline">Logout</span><span className="lg:hidden">Logout</span></button>
                     </div>
                 </header>
@@ -439,7 +448,7 @@ function MainDashboard({ setToken }) {
                             <div className="cnx-surface mb-7 bg-[linear-gradient(110deg,rgba(246,198,209,.13),rgba(255,255,255,.03))] p-6"><p className="cnx-kicker">Explore CNXify</p><h2 className="cnx-page-title mt-2">Search results</h2><p className="mt-2 text-sm text-[#b9a6c0]">Find songs, playlists, and people in one place.</p></div>
                             {searchQuery.trim() && <div className="mt-7 space-y-8">
                                 <SearchResults title="Songs" icon={<Play size={15} fill="currentColor" />} empty="No matching songs." items={searchResults.songs} renderItem={(song) => <button key={song.id} onClick={() => playSong(song)} className="flex w-full items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left hover:bg-white/10"><span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#f6c6d1]/15 text-[#f6c6d1]">{song.cover_path ? <img src={apiUrl(song.cover_path)} alt="" className="h-full w-full object-cover" /> : <Play size={16} fill="currentColor" />}</span><span className="min-w-0"><b className="block truncate">{song.title}</b><small className="block truncate text-gray-400">{song.artist} · {song.album}</small></span><TypeBadge label="Song" /></button>} />
-                                <SearchResults title="Playlists" icon={<ListMusic size={15} />} empty="No public playlists found." items={searchResults.playlists} renderItem={(playlist) => <button key={playlist.id} onClick={() => openPlaylist(playlist)} className="flex w-full items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left hover:bg-white/10"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#f6c6d1]/15 text-[#f6c6d1]"><ListMusic size={20} /></span><span className="min-w-0"><b className="block truncate">{playlist.title}</b><small className="block truncate text-gray-400">{playlist.description || 'Public playlist'}</small></span><TypeBadge label="Playlist" /></button>} />
+                                <SearchResults title="Playlists" icon={<ListMusic size={15} />} empty="No public playlists found." items={searchResults.playlists} renderItem={(playlist) => <button key={playlist.id} onClick={() => openPlaylist(playlist)} className="flex w-full items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left hover:bg-white/10"><span className="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-[#f6c6d1]/15 text-[#f6c6d1]">{playlist.cover_path ? <img src={apiUrl(playlist.cover_path)} alt="" className="h-full w-full object-cover" /> : <ListMusic size={20} />}</span><span className="min-w-0"><b className="block truncate">{playlist.title}</b><small className="block truncate text-gray-400">{playlist.description || 'Public playlist'}</small></span><TypeBadge label="Playlist" /></button>} />
                                 <SearchResults title="Colleagues" icon={<UserRound size={15} />} empty="No colleague profiles found." items={searchResults.profiles} renderItem={(profile) => <button key={profile.id} onClick={() => openProfile(profile.id)} className="flex w-full items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left hover:bg-white/10"><span className="grid h-11 w-11 place-items-center overflow-hidden rounded-full bg-[#f6c6d1]/15 text-[#f6c6d1]">{profile.avatar_path ? <img src={apiUrl(profile.avatar_path)} alt="" className="h-full w-full object-cover" /> : <UserRound size={19} />}</span><b className="truncate">{profile.username}</b><TypeBadge label="Profile" /></button>} />
                             </div>}
                             {searchResults.__legacy ? (
@@ -464,15 +473,18 @@ function MainDashboard({ setToken }) {
                             ) : (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6">
                                     {myPlaylists.map(playlist => (
-                                        <button key={playlist.id} onClick={() => openPlaylist(playlist)} className="cnx-card cursor-pointer p-3.5 text-left group">
-                                            <div className="w-full aspect-square bg-[#4a395c] rounded-lg mb-4 flex items-center justify-center text-5xl shadow-md group-hover:shadow-xl transition-all relative">
-                                                <Disc size={42} className="text-[#f6c6d1]/70" />
+                                        <div key={playlist.id} className="cnx-card p-3.5 text-left group">
+                                            <button onClick={() => openPlaylist(playlist)} className="w-full text-left">
+                                            <div className="w-full aspect-square overflow-hidden bg-[#4a395c] rounded-lg mb-4 flex items-center justify-center text-5xl shadow-md group-hover:shadow-xl transition-all relative">
+                                                {playlist.cover_path ? <img src={apiUrl(playlist.cover_path)} alt={playlist.title} className="h-full w-full object-cover" /> : <Disc size={42} className="text-[#f6c6d1]/70" />}
                                             </div>
                                             <h4 className="font-bold text-sm mb-1 truncate text-white">{playlist.title}</h4>
                                             <p className="text-xs text-gray-400 truncate">
                                                 {playlist.is_public ? 'Public Playlist' : 'Private Playlist'}
                                             </p>
-                                        </button>
+                                            </button>
+                                            <div className="mt-3 flex gap-2 border-t border-white/10 pt-2"><button onClick={() => { setPlaylistToEdit(playlist); setIsPlaylistModalOpen(true); }} className="flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-bold text-gray-400 transition hover:bg-white/10 hover:text-white"><Edit3 size={13} /> Edit</button><button onClick={() => deletePlaylist(playlist)} className="flex items-center justify-center rounded-lg px-2 py-1.5 text-gray-400 transition hover:bg-red-500/15 hover:text-red-200" title="Delete playlist" aria-label={`Delete ${playlist.title}`}><Trash2 size={14} /></button></div>
+                                        </div>
                                     ))}
                                 </div>
                             )}
@@ -482,7 +494,7 @@ function MainDashboard({ setToken }) {
                     {currentView === 'playlistDetail' && selectedPlaylist && (
                         <div className="w-full">
                             <button onClick={() => setCurrentView('library')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white"><ArrowLeft size={16} /> Your Library</button>
-                            <div className="mb-9 flex flex-col gap-5 rounded-3xl border border-white/10 bg-gradient-to-br from-[#563a63] via-[#34233f] to-[#211827] p-7 sm:flex-row sm:items-end"><div className="grid h-32 w-32 place-items-center rounded-2xl bg-[#f6c6d1]/15 text-[#f6c6d1]"><Disc size={56} /></div><div className="flex-1"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#f6c6d1]">{selectedPlaylist.is_public ? 'Public playlist' : 'Private playlist'}</p><h2 className="mt-2 text-4xl font-black tracking-tight">{selectedPlaylist.title}</h2><p className="mt-2 text-sm text-gray-300">{playlistSongs.length} {playlistSongs.length === 1 ? 'song' : 'songs'}</p></div><button onClick={() => playlistSongs[0] && playSong(playlistSongs[0], playlistSongs)} disabled={!playlistSongs.length} className="inline-flex items-center justify-center gap-3 rounded-full bg-[#f6c6d1] px-6 py-3 font-black text-[#281a30] transition hover:scale-105 disabled:opacity-50"><span aria-hidden="true" className="ml-0.5 block h-0 w-0 border-y-[7px] border-y-transparent border-l-[10px] border-l-current" /> Play</button></div>
+                            <div className="mb-9 flex flex-col gap-5 rounded-3xl border border-white/10 bg-gradient-to-br from-[#563a63] via-[#34233f] to-[#211827] p-7 sm:flex-row sm:items-end"><div className="grid h-32 w-32 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#f6c6d1]/15 text-[#f6c6d1]">{selectedPlaylist.cover_path ? <img src={apiUrl(selectedPlaylist.cover_path)} alt={selectedPlaylist.title} className="h-full w-full object-cover" /> : <Disc size={56} />}</div><div className="flex-1"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#f6c6d1]">{selectedPlaylist.is_public ? 'Public playlist' : 'Private playlist'}</p><h2 className="mt-2 text-4xl font-black tracking-tight">{selectedPlaylist.title}</h2><p className="mt-2 text-sm text-gray-300">{selectedPlaylist.description || `${playlistSongs.length} ${playlistSongs.length === 1 ? 'song' : 'songs'}`}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => playlistSongs[0] && playSong(playlistSongs[0], playlistSongs)} disabled={!playlistSongs.length} className="inline-flex items-center justify-center gap-3 rounded-full bg-[#f6c6d1] px-6 py-3 font-black text-[#281a30] transition hover:scale-105 disabled:opacity-50"><span aria-hidden="true" className="ml-0.5 block h-0 w-0 border-y-[7px] border-y-transparent border-l-[10px] border-l-current" /> Play</button><button onClick={() => { setPlaylistToEdit(selectedPlaylist); setIsPlaylistModalOpen(true); }} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white hover:bg-white/15"><Edit3 size={16} /> Edit</button><button onClick={() => deletePlaylist(selectedPlaylist)} className="grid h-11 w-11 place-items-center rounded-full border border-red-300/20 bg-red-500/10 text-red-100 hover:bg-red-500/20" title="Delete playlist" aria-label="Delete playlist"><Trash2 size={16} /></button></div></div>
                             {isPlaylistLoading ? <p className="text-sm text-gray-400">Loading playlist…</p> : playlistSongs.length === 0 ? <p className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-8 text-sm text-gray-400">This playlist has no songs yet. Use the + action on an album track to add one.</p> : <div className="space-y-2">{playlistSongs.map((song, index) => <button key={song.id} onClick={() => playSong(song)} className="grid w-full grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-white/5"><span className="text-sm text-gray-500">{index + 1}</span><span className="min-w-0"><span className="block truncate text-sm font-bold text-white">{song.title}</span><span className="block truncate text-xs text-gray-400">{song.artist} · {song.album}</span></span><span aria-hidden="true" className="ml-0.5 block h-0 w-0 border-y-[5px] border-y-transparent border-l-[7px] border-l-[#f6c6d1]" /></button>)}</div>}
                         </div>
                     )}
@@ -642,7 +654,9 @@ function MainDashboard({ setToken }) {
                 isOpen={isPlaylistModalOpen} 
                 onClose={() => setIsPlaylistModalOpen(false)} 
                 token={token} 
+                playlist={playlistToEdit}
                 onPlaylistCreated={handlePlaylistCreated} 
+                onPlaylistUpdated={handlePlaylistUpdated}
             />
             <AddToPlaylistModal song={songToAdd} playlists={myPlaylists} token={token} onClose={() => setSongToAdd(null)} onCreatePlaylist={() => setIsPlaylistModalOpen(true)} />
             <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} token={token} />

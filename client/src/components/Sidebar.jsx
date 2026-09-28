@@ -1,8 +1,8 @@
 // client/src/components/Sidebar.jsx
-import { Disc3, Home, Search, Library, ShieldAlert, PlusSquare, Heart, MessageCircle, Mic2, UserCircle } from 'lucide-react';
+import { Disc3, Home, Search, Library, ShieldAlert, PlusSquare, Heart, MessageCircle, Mic2, UserCircle, UploadCloud } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 
-export default function Sidebar({ userRole, onNavigate, currentView, onOpenNewPlaylist, onOpenChat, unreadMessages, playlists, followedArtists, onPlayPlaylist, onSelectArtist, onOpenProfile }) {
+export default function Sidebar({ userRole, onlineCount, onOpenUpload, onNavigate, currentView, onOpenNewPlaylist, onOpenChat, unreadMessages, playlists, followedArtists, onPlayPlaylist, onSelectArtist, onOpenProfile }) {
     const navItemClass = (view) => `flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all font-semibold text-sm ${currentView === view ? 'bg-[#f6c6d1] text-[#281a30] shadow-[0_8px_22px_rgba(246,198,209,0.14)]' : 'text-[#bbaec1] hover:bg-white/7 hover:text-white'}`;
 
     return (
@@ -39,6 +39,15 @@ export default function Sidebar({ userRole, onNavigate, currentView, onOpenNewPl
                     {userRole === 'ADMIN' && <button onClick={() => onNavigate('admin')} className={navItemClass('admin')}><ShieldAlert size={20} /> Admin Portal</button>}
                 </nav>
 
+                <div className="mx-3 mt-5 rounded-2xl border border-white/10 bg-white/[.04] p-3.5">
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2 text-xs font-bold text-[#d9cadf]"><span className="h-2 w-2 animate-pulse rounded-full bg-[#f6c6d1]" /> Live now</span>
+                        <span className="text-sm font-black text-white">{onlineCount}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-[#9f8ca7]">colleagues online</p>
+                    {userRole === 'ADMIN' && <button onClick={onOpenUpload} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#f6c6d1] px-3 py-2 text-xs font-black text-[#281a30] transition hover:bg-white"><UploadCloud size={15} /> Upload music</button>}
+                </div>
+
                 <div className="mx-5 my-5 border-t border-white/10" />
 
                 <div className="flex flex-col gap-1 px-3">
@@ -61,7 +70,7 @@ export default function Sidebar({ userRole, onNavigate, currentView, onOpenNewPl
 
                 <div className="flex flex-col gap-1 px-3">
                     <p className="px-4 pb-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#cdb8d2]">Playlists</p>
-                    {playlists.slice(0, 5).map((playlist) => <button key={playlist.id} onClick={() => onPlayPlaylist(playlist)} className="flex items-center gap-3 rounded-xl px-4 py-2 text-left text-sm font-medium text-gray-400 transition hover:bg-white/5 hover:text-white"><Disc3 size={16} className="text-[#f6c6d1]/70" /><span className="truncate">{playlist.title}</span></button>)}
+                    {playlists.slice(0, 5).map((playlist) => <button key={playlist.id} onClick={() => onPlayPlaylist(playlist)} className="flex items-center gap-3 rounded-xl px-4 py-2 text-left text-sm font-medium text-gray-400 transition hover:bg-white/5 hover:text-white"><span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-md bg-[#f6c6d1]/15">{playlist.cover_path ? <img src={apiUrl(playlist.cover_path)} alt="" className="h-full w-full object-cover" /> : <Disc3 size={16} className="text-[#f6c6d1]/70" />}</span><span className="truncate">{playlist.title}</span></button>)}
                     {playlists.length === 0 && <p className="px-4 py-1 text-xs text-gray-600">No playlists yet</p>}
                 </div>
 

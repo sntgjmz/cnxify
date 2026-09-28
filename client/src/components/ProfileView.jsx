@@ -109,8 +109,8 @@ export default function ProfileView({ userId, token, onBack, onPlayPlaylist, now
                             onClick={() => onPlayPlaylist(playlist)}
                             className="cnx-card cursor-pointer p-3.5 group"
                         >
-                            <div className="w-full aspect-square bg-[#4a395c] rounded-lg mb-4 flex items-center justify-center text-4xl shadow-md group-hover:shadow-xl transition-all relative">
-                                <Disc className="text-[#f2cdd6]" size={40} />
+                            <div className="w-full aspect-square overflow-hidden bg-[#4a395c] rounded-lg mb-4 flex items-center justify-center text-4xl shadow-md group-hover:shadow-xl transition-all relative">
+                                {playlist.cover_path ? <img src={apiUrl(playlist.cover_path)} alt={playlist.title} className="h-full w-full object-cover" /> : <Disc className="text-[#f2cdd6]" size={40} />}
                             </div>
                             <h4 className="font-bold text-sm mb-1 truncate text-white">{playlist.title}</h4>
                             <p className="text-xs text-gray-400">Public Playlist</p>
