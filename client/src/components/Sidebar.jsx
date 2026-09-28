@@ -1,24 +1,24 @@
 // client/src/components/Sidebar.jsx
-import { Disc3, Home, Search, Library, ShieldAlert, PlusSquare, Heart, LogOut, MessageCircle, Mic2, UserCircle } from 'lucide-react';
+import { Disc3, Home, Search, Library, ShieldAlert, PlusSquare, Heart, MessageCircle, Mic2, UserCircle } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 
-export default function Sidebar({ userRole, onNavigate, currentView, onOpenNewPlaylist, onOpenChat, unreadMessages, onLogout, playlists, followedArtists, onPlayPlaylist, onSelectArtist, onOpenProfile }) {
-    const navItemClass = (view) => `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors font-medium text-sm ${currentView === view ? 'bg-[#f6c6d1] text-[#281a30] shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`;
+export default function Sidebar({ userRole, onNavigate, currentView, onOpenNewPlaylist, onOpenChat, unreadMessages, playlists, followedArtists, onPlayPlaylist, onSelectArtist, onOpenProfile }) {
+    const navItemClass = (view) => `flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all font-semibold text-sm ${currentView === view ? 'bg-[#f6c6d1] text-[#281a30] shadow-[0_8px_22px_rgba(246,198,209,0.14)]' : 'text-[#bbaec1] hover:bg-white/7 hover:text-white'}`;
 
     return (
-        <aside className="w-60 bg-[#120d16] h-screen py-7 flex flex-col justify-between fixed left-0 top-0 border-r border-white/5 select-none text-gray-300">
-            <div className="flex flex-col gap-6">
+        <aside className="cnx-sidebar fixed left-0 top-0 flex h-screen w-64 flex-col border-r border-white/10 bg-[linear-gradient(180deg,#17101d_0%,#110c15_100%)] py-5 text-gray-300 shadow-[12px_0_40px_rgba(0,0,0,0.16)]">
+            <div className="min-h-0 flex-1 overflow-y-auto">
                 {/* Logo */}
                 <h3 
-                    className="text-xl font-bold text-[#f2cdd6] tracking-wide px-6 cursor-pointer flex items-center gap-2" 
+                    className="mx-3 flex cursor-pointer items-center gap-2 rounded-2xl px-3 py-3 text-xl font-black tracking-tight text-white hover:bg-white/5" 
                     onClick={() => onNavigate('home')}
                 >
-                    <span className="bg-[#f6c6d1] text-[#1c1423] p-1.5 rounded-xl"><Mic2 size={16} /></span>
+                    <span className="rounded-xl bg-[#f6c6d1] p-2 text-[#1c1423] shadow-lg"><Mic2 size={17} /></span>
                     CNXify
                 </h3>
 
                 {/* Main Nav Links */}
-                <nav className="flex flex-col gap-1 px-2">
+                <nav className="mt-5 flex flex-col gap-1 px-3">
                     <button onClick={() => onNavigate('home')} className={navItemClass('home')}>
                         <Home size={20} /> Home
                     </button>
@@ -31,16 +31,17 @@ export default function Sidebar({ userRole, onNavigate, currentView, onOpenNewPl
                     <button onClick={() => onNavigate('artists')} className={navItemClass('artists')}>
                         <Mic2 size={20} /> Artists
                     </button>
-                    <button onClick={onOpenProfile} className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-colors font-medium text-sm"><UserCircle size={20} /> My profile</button>
-                    <button onClick={onOpenChat} className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-colors font-medium text-sm">
+                    <button onClick={onOpenProfile} className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-[#bbaec1] transition hover:bg-white/7 hover:text-white"><UserCircle size={20} /> My profile</button>
+                    <button onClick={onOpenChat} className="flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-[#bbaec1] transition hover:bg-white/7 hover:text-white">
                         <span className="flex items-center gap-3"><MessageCircle size={20} /> Colleague chat</span>
                         {unreadMessages > 0 && <span className="grid min-w-5 h-5 place-items-center rounded-full bg-[#f6c6d1] px-1 text-[11px] font-black text-[#281a30]">{unreadMessages > 99 ? '99+' : unreadMessages}</span>}
                     </button>
+                    {userRole === 'ADMIN' && <button onClick={() => onNavigate('admin')} className={navItemClass('admin')}><ShieldAlert size={20} /> Admin Portal</button>}
                 </nav>
 
-                <div className="mx-5 my-1 border-t border-white/10" />
+                <div className="mx-5 my-5 border-t border-white/10" />
 
-                <div className="flex flex-col gap-1 px-2">
+                <div className="flex flex-col gap-1 px-3">
                     <p className="px-4 pb-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#cdb8d2]">Your music</p>
                     <button onClick={onOpenNewPlaylist} className="flex items-center gap-4 px-4 py-2 text-gray-400 hover:text-white transition-colors text-sm font-medium text-left">
                         <div className="bg-[#f6c6d1]/20 p-1 rounded text-[#f6c6d1]">
@@ -56,35 +57,21 @@ export default function Sidebar({ userRole, onNavigate, currentView, onOpenNewPl
                     </button>
                 </div>
 
-                <div className="mx-5 my-1 border-t border-white/10" />
+                <div className="mx-5 my-5 border-t border-white/10" />
 
-                <div className="flex flex-col gap-1 px-2">
+                <div className="flex flex-col gap-1 px-3">
                     <p className="px-4 pb-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#cdb8d2]">Playlists</p>
                     {playlists.slice(0, 5).map((playlist) => <button key={playlist.id} onClick={() => onPlayPlaylist(playlist)} className="flex items-center gap-3 rounded-xl px-4 py-2 text-left text-sm font-medium text-gray-400 transition hover:bg-white/5 hover:text-white"><Disc3 size={16} className="text-[#f6c6d1]/70" /><span className="truncate">{playlist.title}</span></button>)}
                     {playlists.length === 0 && <p className="px-4 py-1 text-xs text-gray-600">No playlists yet</p>}
                 </div>
 
-                <div className="mx-5 my-1 border-t border-white/10" />
+                <div className="mx-5 my-5 border-t border-white/10" />
 
-                <div className="flex flex-col gap-1 px-2">
+                <div className="flex flex-col gap-1 px-3 pb-5">
                     <p className="px-4 pb-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#cdb8d2]">Following</p>
                     {followedArtists.slice(0, 5).map((artist) => <button key={artist.artist_name} onClick={() => onSelectArtist(artist.artist_name)} className="flex items-center gap-3 rounded-xl px-4 py-1.5 text-left text-sm font-medium text-gray-300 transition hover:bg-white/5 hover:text-white"><span className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-[#f6c6d1]/15">{artist.cover_path && <img src={apiUrl(artist.cover_path)} alt="" className="h-full w-full object-cover" />}</span><span className="truncate">{artist.artist_name}</span></button>)}
                     {followedArtists.length === 0 && <p className="px-4 py-1 text-xs text-gray-600">Follow artists to see them here</p>}
                 </div>
-            </div>
-
-            <div className="px-6 pb-32 flex flex-col gap-3">
-                {userRole === 'ADMIN' && (
-                    <button 
-                        onClick={() => onNavigate('admin')}
-                        className="flex items-center gap-2 text-xs font-bold text-[#ffdbe2] bg-[#f6c6d1]/10 p-2.5 rounded-xl border border-[#f6c6d1]/25 hover:bg-[#f6c6d1]/20 transition-colors"
-                    >
-                        <ShieldAlert size={14} /> Admin Portal
-                    </button>
-                )}
-                <button onClick={onLogout} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-gray-400 transition hover:bg-white/5 hover:text-[#ffdbe2]">
-                    <LogOut size={15} /> Leave CNXify
-                </button>
             </div>
         </aside>
     );

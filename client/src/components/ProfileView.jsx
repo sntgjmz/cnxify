@@ -80,12 +80,12 @@ export default function ProfileView({ userId, token, onBack, onPlayPlaylist, now
             </button>
             
             {/* Profile Header */}
-            <div className="flex flex-col sm:flex-row sm:items-end gap-6 mb-10 bg-gradient-to-br from-[#5c3b6f] via-[#34233f] to-[#201827] p-8 rounded-3xl border border-white/10 shadow-2xl">
-                <div className="w-28 h-28 rounded-full bg-[#f6c6d1] text-[#241829] flex items-center justify-center shadow-xl ring-8 ring-white/5">
-                    {profile.avatar_path ? <img src={apiUrl(profile.avatar_path)} alt="" className="h-full w-full object-cover" /> : <User size={54} />}
+            <div className="relative mb-9 flex flex-col gap-6 overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(120deg,#634173_0%,#382640_48%,#201827_100%)] p-7 shadow-2xl sm:flex-row sm:items-end sm:p-9">
+                <div className="h-28 w-28 shrink-0 overflow-hidden rounded-full bg-[#f6c6d1] text-[#241829] flex items-center justify-center shadow-xl ring-8 ring-white/5">
+                    {profile.avatar_path ? <img src={apiUrl(profile.avatar_path)} alt="" className="block h-full w-full rounded-full object-cover" /> : <User size={54} />}
                 </div>
                 <div className="flex-1">
-                    <h1 className="text-4xl font-black tracking-tighter mb-2">{profile.username}</h1>
+                    <p className="mb-2 text-[11px] font-black uppercase tracking-[.18em] text-[#f6c6d1]">{isCurrentUser ? 'Your profile' : 'CNXify colleague'}</p><h1 className="text-4xl font-black tracking-tighter mb-2 sm:text-5xl">{profile.username}</h1>
                     <p className="text-sm text-gray-300">{profile.follower_count} {profile.follower_count === 1 ? 'follower' : 'followers'} · Member since {new Date(profile.created_at).toLocaleDateString()}</p>
                     {nowListening && <p className="mt-3 flex items-center gap-2 text-sm font-medium text-[#ffd6de]"><Radio size={16} className="animate-pulse" /> Listening to {nowListening.title} · {nowListening.artist}</p>}
                 </div>
@@ -95,7 +95,7 @@ export default function ProfileView({ userId, token, onBack, onPlayPlaylist, now
             {isEditing && <form onSubmit={saveProfile} className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-5"><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold text-gray-300">Display name<input value={username} onChange={(event) => setUsername(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 p-3 text-white outline-none focus:border-[#f6c6d1]" /></label><label className="text-sm font-bold text-gray-300">Profile picture<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} className="mt-2 block w-full text-xs text-gray-400" /></label></div><label className="mt-4 flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={showActivity} onChange={(event) => setShowActivity(event.target.checked)} className="accent-[#f6c6d1]" /> Show my listening activity to colleagues</label>{saveError && <p className="mt-3 text-sm text-red-200">{saveError}</p>}<button className="mt-4 rounded-full bg-[#f6c6d1] px-5 py-2.5 text-sm font-bold text-[#281a30]">Save changes</button></form>}
 
             {/* Public Playlists */}
-            <h3 className="text-xl font-bold mb-5 tracking-tight">{profile.username}'s Public Playlists</h3>
+            <div className="mb-5 flex items-center justify-between"><div><p className="text-[11px] font-black uppercase tracking-[.16em] text-[#f6c6d1]">Music shelf</p><h3 className="mt-1 text-xl font-black tracking-tight">{isCurrentUser ? 'Your playlists' : `${profile.username}'s playlists`}</h3></div><span className="rounded-full bg-white/5 px-3 py-1 text-xs font-bold text-[#cdb8d2]">{profile.playlists.length} public</span></div>
             
             {profile.playlists.length === 0 ? (
                 <p className="text-gray-400 text-sm p-6 bg-[#342742]/50 rounded-xl border border-[#4a395c] border-dashed">
@@ -107,7 +107,7 @@ export default function ProfileView({ userId, token, onBack, onPlayPlaylist, now
                         <div 
                             key={playlist.id} 
                             onClick={() => onPlayPlaylist(playlist)}
-                            className="bg-white/5 hover:bg-white/10 p-4 rounded-2xl transition-all cursor-pointer group border border-white/5 hover:border-[#ffd6de]/40"
+                            className="cnx-card cursor-pointer p-3.5 group"
                         >
                             <div className="w-full aspect-square bg-[#4a395c] rounded-lg mb-4 flex items-center justify-center text-4xl shadow-md group-hover:shadow-xl transition-all relative">
                                 <Disc className="text-[#f2cdd6]" size={40} />

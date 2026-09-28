@@ -55,6 +55,10 @@ function authenticateToken(req, res, next) {
 }
 function requireAdmin(req, res, next) { return req.user.role === 'ADMIN' ? next() : res.status(403).json({ error: 'Admin access required.' }); }
 const isOneOf = (value, options) => typeof value === 'string' && options.includes(value);
+const createNotification = async (userId, type, message, linkType = null, linkId = null) => {
+    try { await pool.query('INSERT INTO notifications (user_id, type, message, link_type, link_id) VALUES ($1, $2, $3, $4, $5)', [userId, type, message, linkType, linkId]); }
+    catch (error) { if (error.code !== '42P01') console.error('Notification creation error:', error); }
+};
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/', (_req, res) => res.json({ ok: true, service: 'CNXify API', health: '/api/health' }));
@@ -93,7 +97,53 @@ app.post('/api/songs', authenticateToken, requireAdmin, (req, res, next) => uplo
         return res.status(201).json(result.rows[0]);
     } catch (error) { console.error('Song upload error:', error); return res.status(500).json({ error: 'Failed to upload song.' }); }
 });
+app.post('/api/chat/images', authenticateToken, (req, res, next) => upload.single('image')(req, res, (error) => error ? res.status(400).json({ error: error.message }) : next()), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Choose a JPEG, PNG, or WebP image.' });
+    return res.status(201).json({ image_path: `/uploads/covers/${req.file.filename}` });
+});
 app.get('/api/songs', authenticateToken, async (_req, res) => { try { return res.json((await pool.query('SELECT * FROM songs ORDER BY created_at DESC')).rows); } catch { return res.status(500).json({ error: 'Unable to load songs.' }); } });
+app.delete('/api/admin/songs/:songId', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await pool.query('DELETE FROM songs WHERE id = $1 RETURNING id, title', [req.params.songId]);
+        return result.rows[0] ? res.json({ deleted: true, song: result.rows[0] }) : res.status(404).json({ error: 'Song not found.' });
+    } catch (error) { console.error('Admin song deletion error:', error); return res.status(500).json({ error: 'Unable to delete song.' }); }
+});
+app.put('/api/admin/songs/:songId', authenticateToken, requireAdmin, async (req, res) => {
+    const title = String(req.body.title || '').trim(); const artist = String(req.body.artist || '').trim(); const album = String(req.body.album || 'Unknown Album').trim();
+    if (!title || !artist || title.length > 200 || artist.length > 200 || album.length > 200) return res.status(400).json({ error: 'Provide a title, artist, and album up to 200 characters.' });
+    try {
+        const result = await pool.query('UPDATE songs SET title = $1, artist = $2, album = $3 WHERE id = $4 RETURNING *', [title, artist, album || 'Unknown Album', req.params.songId]);
+        return result.rows[0] ? res.json(result.rows[0]) : res.status(404).json({ error: 'Song not found.' });
+    } catch { return res.status(500).json({ error: 'Unable to update song.' }); }
+});
+app.post('/api/history', authenticateToken, async (req, res) => {
+    const songId = req.body.songId;
+    if (!songId) return res.status(400).json({ error: 'A song is required.' });
+    try {
+        await pool.query('INSERT INTO play_history (user_id, song_id) VALUES ($1, $2)', [req.user.id, songId]);
+        return res.status(201).json({ recorded: true });
+    } catch (error) {
+        if (error.code === '42P01') return res.status(503).json({ error: 'Database migration required. Run the latest schema.sql.' });
+        return res.status(500).json({ error: 'Unable to record play history.' });
+    }
+});
+app.get('/api/history', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT DISTINCT ON (s.id) s.*, ph.played_at FROM play_history ph JOIN songs s ON s.id = ph.song_id WHERE ph.user_id = $1 ORDER BY s.id, ph.played_at DESC LIMIT 20', [req.user.id]);
+        return res.json(result.rows.sort((a, b) => new Date(b.played_at) - new Date(a.played_at)));
+    } catch (error) {
+        if (error.code === '42P01') return res.status(503).json({ error: 'Database migration required. Run the latest schema.sql.' });
+        return res.status(500).json({ error: 'Unable to load play history.' });
+    }
+});
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+    try { return res.json((await pool.query('SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 40', [req.user.id])).rows); }
+    catch (error) { if (error.code === '42P01') return res.json([]); return res.status(500).json({ error: 'Unable to load notifications.' }); }
+});
+app.put('/api/notifications/read', authenticateToken, async (req, res) => {
+    try { await pool.query('UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE', [req.user.id]); return res.json({ updated: true }); }
+    catch (error) { if (error.code === '42P01') return res.json({ updated: false }); return res.status(500).json({ error: 'Unable to update notifications.' }); }
+});
 app.get('/api/search', authenticateToken, async (req, res) => {
     const query = String(req.query.q || '').trim();
     if (!query) return res.json({ songs: [], playlists: [], profiles: [] });
@@ -106,6 +156,9 @@ app.get('/api/search', authenticateToken, async (req, res) => {
         ]);
         return res.json({ songs: songs.rows, playlists: playlists.rows, profiles: profiles.rows });
     } catch { return res.status(500).json({ error: 'Unable to search CNXify.' }); }
+});
+app.get('/api/users/directory', authenticateToken, async (_req, res) => {
+    try { return res.json((await pool.query("SELECT id, username, avatar_path, role FROM users WHERE status = 'APPROVED' ORDER BY username ASC")).rows); } catch { return res.status(500).json({ error: 'Unable to load colleague directory.' }); }
 });
 app.post('/api/playlists', authenticateToken, async (req, res) => {
     const title = String(req.body.title || '').trim(); if (!title || title.length > 100) return res.status(400).json({ error: 'Playlist title must be between 1 and 100 characters.' });
@@ -146,6 +199,20 @@ app.post('/api/artists/:artistName/follow', authenticateToken, async (req, res) 
 app.delete('/api/artists/:artistName/follow', authenticateToken, async (req, res) => {
     try { await pool.query('DELETE FROM artist_follows WHERE user_id = $1 AND artist_name = $2', [req.user.id, req.params.artistName]); return res.json({ following: false }); } catch (error) { if (error.code === '42P01') return res.status(503).json({ error: 'Database migration required: create the artist_follows table from schema.sql.' }); return res.status(500).json({ error: 'Unable to unfollow artist.' }); }
 });
+app.get('/api/artists/images', authenticateToken, async (_req, res) => {
+    try { return res.json((await pool.query('SELECT artist_name, image_path FROM artist_profiles WHERE image_path IS NOT NULL')).rows); } catch (error) { if (error.code === '42P01') return res.json([]); return res.status(500).json({ error: 'Unable to load artist images.' }); }
+});
+app.put('/api/artists/:artistName/image', authenticateToken, requireAdmin, (req, res, next) => upload.single('image')(req, res, (error) => error ? res.status(400).json({ error: error.message }) : next()), async (req, res) => {
+    const artistName = String(req.params.artistName || '').trim();
+    if (!artistName || !req.file) return res.status(400).json({ error: 'An artist image is required.' });
+    try {
+        const exists = await pool.query('SELECT 1 FROM songs WHERE artist = $1 LIMIT 1', [artistName]);
+        if (!exists.rows[0]) return res.status(404).json({ error: 'Artist not found.' });
+        const imagePath = `/uploads/covers/${req.file.filename}`;
+        const result = await pool.query('INSERT INTO artist_profiles (artist_name, image_path, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (artist_name) DO UPDATE SET image_path = EXCLUDED.image_path, updated_at = NOW() RETURNING artist_name, image_path', [artistName, imagePath]);
+        return res.json(result.rows[0]);
+    } catch (error) { if (error.code === '42P01') return res.status(503).json({ error: 'Database migration required. Run the latest server/schema.sql against your database.' }); return res.status(500).json({ error: 'Unable to update artist image.' }); }
+});
 app.get('/api/artists/following', authenticateToken, async (req, res) => {
     try { const result = await pool.query('SELECT artist_follows.artist_name, (SELECT cover_path FROM songs WHERE songs.artist = artist_follows.artist_name AND cover_path IS NOT NULL ORDER BY created_at DESC LIMIT 1) AS cover_path FROM artist_follows WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]); return res.json(result.rows); } catch (error) { if (error.code === '42P01') return res.status(503).json({ error: 'Database migration required: create the artist_follows table from schema.sql.' }); return res.status(500).json({ error: 'Unable to load followed artists.' }); }
 });
@@ -173,9 +240,29 @@ app.post('/api/feedback', authenticateToken, async (req, res) => {
     try { return res.status(201).json((await pool.query('INSERT INTO feedback (user_id, type, content) VALUES ($1, $2, $3) RETURNING *', [req.user.id, type, content])).rows[0]); } catch { return res.status(500).json({ error: 'Unable to submit feedback.' }); }
 });
 app.get('/api/admin/users/pending', authenticateToken, requireAdmin, async (_req, res) => { try { return res.json((await pool.query("SELECT id, username, email, created_at FROM users WHERE status = 'PENDING' ORDER BY created_at ASC")).rows); } catch { return res.status(500).json({ error: 'Unable to load pending users.' }); } });
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (_req, res) => { try { return res.json((await pool.query('SELECT id, username, email, role, status, avatar_path, created_at FROM users ORDER BY username ASC')).rows); } catch { return res.status(500).json({ error: 'Unable to load users.' }); } });
+app.delete('/api/admin/chat/messages', authenticateToken, requireAdmin, async (_req, res) => {
+    try { await pool.query('DELETE FROM chat_messages'); io.emit('chatHistory', []); io.emit('chatCleared'); return res.json({ cleared: true }); } catch { return res.status(500).json({ error: 'Unable to clear community chat.' }); }
+});
+app.delete('/api/admin/chat/messages/:messageId', authenticateToken, requireAdmin, async (req, res) => {
+    try { const result = await pool.query('DELETE FROM chat_messages WHERE id = $1 RETURNING id', [req.params.messageId]); if (!result.rows[0]) return res.status(404).json({ error: 'Message not found.' }); io.emit('chatMessageDeleted', String(result.rows[0].id)); return res.json({ deleted: true, id: String(result.rows[0].id) }); } catch { return res.status(500).json({ error: 'Unable to delete message.' }); }
+});
+app.delete('/api/chat/messages/:messageId', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('DELETE FROM chat_messages WHERE id = $1 AND user_id = $2 RETURNING id', [req.params.messageId, req.user.id]);
+        if (!result.rows[0]) return res.status(404).json({ error: 'Message not found or you cannot delete it.' });
+        io.emit('chatMessageDeleted', String(result.rows[0].id));
+        return res.json({ deleted: true, id: String(result.rows[0].id) });
+    } catch { return res.status(500).json({ error: 'Unable to delete message.' }); }
+});
 app.put('/api/admin/users/:id/status', authenticateToken, requireAdmin, async (req, res) => {
     if (!isOneOf(req.body.status, ['APPROVED', 'REJECTED'])) return res.status(400).json({ error: 'Invalid user status.' });
-    try { const result = await pool.query("UPDATE users SET status = $1 WHERE id = $2 AND role <> 'ADMIN' RETURNING id, status", [req.body.status, req.params.id]); return result.rows[0] ? res.json(result.rows[0]) : res.status(404).json({ error: 'Pending user not found.' }); } catch { return res.status(500).json({ error: 'Unable to update user.' }); }
+    try {
+        const result = await pool.query("UPDATE users SET status = $1 WHERE id = $2 AND role <> 'ADMIN' RETURNING id, status", [req.body.status, req.params.id]);
+        if (!result.rows[0]) return res.status(404).json({ error: 'Pending user not found.' });
+        await createNotification(result.rows[0].id, 'ACCOUNT_STATUS', req.body.status === 'APPROVED' ? 'Your CNXify account has been approved.' : 'Your CNXify account registration was not approved.');
+        return res.json(result.rows[0]);
+    } catch { return res.status(500).json({ error: 'Unable to update user.' }); }
 });
 app.get('/api/admin/feedback', authenticateToken, requireAdmin, async (_req, res) => { try { return res.json((await pool.query('SELECT feedback.id, feedback.type, feedback.content, feedback.status, feedback.created_at, users.username FROM feedback JOIN users ON users.id = feedback.user_id ORDER BY feedback.created_at DESC')).rows); } catch { return res.status(500).json({ error: 'Unable to load feedback.' }); } });
 app.put('/api/admin/feedback/:id/status', authenticateToken, requireAdmin, async (req, res) => {
@@ -183,13 +270,17 @@ app.put('/api/admin/feedback/:id/status', authenticateToken, requireAdmin, async
     try { const result = await pool.query('UPDATE feedback SET status = $1 WHERE id = $2 RETURNING id, status', [req.body.status, req.params.id]); return result.rows[0] ? res.json(result.rows[0]) : res.status(404).json({ error: 'Feedback not found.' }); } catch { return res.status(500).json({ error: 'Unable to update feedback.' }); }
 });
 
-const socketsByUser = new Map(); const listeningByUser = new Map();
+const socketsByUser = new Map(); const listeningByUser = new Map(); const chatRateByUser = new Map();
 const emitPresence = () => { io.emit('onlineCount', socketsByUser.size); io.emit('onlineUsers', [...socketsByUser.keys()].map((id) => ({ id, username: socketsByUser.get(id).username, nowListening: socketsByUser.get(id).showListening ? listeningByUser.get(id) || null : null }))); };
 io.use((socket, next) => { try { socket.user = authPayload(socket.handshake.auth?.token); return next(); } catch { return next(new Error('Unauthorized')); } });
 io.on('connection', async (socket) => {
     const userId = String(socket.user.id); const settings = await pool.query('SELECT show_listening_activity FROM users WHERE id = $1', [socket.user.id]).catch(() => ({ rows: [] })); const user = socketsByUser.get(userId) || { username: socket.user.username, showListening: settings.rows[0]?.show_listening_activity !== false, socketIds: new Set() }; user.socketIds.add(socket.id); socketsByUser.set(userId, user); emitPresence();
-    socket.on('requestChatHistory', async () => { try { const rows = (await pool.query('SELECT chat_messages.id, chat_messages.user_id, chat_messages.message, chat_messages.created_at, users.username FROM chat_messages JOIN users ON users.id = chat_messages.user_id ORDER BY chat_messages.created_at DESC LIMIT 100')).rows; socket.emit('chatHistory', rows.reverse()); } catch (error) { console.error('Chat history error:', error); socket.emit('chatError', 'Unable to load chat history.'); } });
-    socket.on('sendMessage', async (payload) => { const message = String(payload?.message || '').trim(); if (!message || message.length > 500) return socket.emit('chatError', 'Messages must be between 1 and 500 characters.'); try { const row = (await pool.query('INSERT INTO chat_messages (user_id, message) VALUES ($1, $2) RETURNING id, user_id, message, created_at', [socket.user.id, message])).rows[0]; io.emit('newMessage', { ...row, username: socket.user.username }); } catch (error) { console.error('Chat send error:', error); socket.emit('chatError', 'Unable to send message.'); } });
+    const canSendChat = (message, songId) => { const now = Date.now(); const previous = chatRateByUser.get(userId); if (previous && now - previous.time < 1200) { socket.emit('chatError', 'Please wait a moment before sending another message.'); return false; } if (previous && previous.message === message && previous.songId === songId && now - previous.time < 15000) { socket.emit('chatError', 'That message was just sent.'); return false; } chatRateByUser.set(userId, { time: now, message, songId }); return true; };
+    socket.on('requestChatHistory', async () => { try { const rows = (await pool.query(`SELECT cm.id, cm.user_id, cm.message, cm.song_id, cm.image_path, cm.created_at, u.username, u.avatar_path, s.title AS song_title, s.artist AS song_artist, s.file_path AS song_file_path, s.cover_path AS song_cover_path, COALESCE((SELECT json_agg(reaction) FROM (SELECT emoji, COUNT(*)::int AS count, BOOL_OR(user_id = $1) AS reacted_by_me FROM chat_message_reactions WHERE message_id = cm.id GROUP BY emoji ORDER BY emoji) reaction), '[]'::json) AS reactions FROM chat_messages cm JOIN users u ON u.id = cm.user_id LEFT JOIN songs s ON s.id = cm.song_id ORDER BY cm.created_at DESC LIMIT 100`, [socket.user.id])).rows; socket.emit('chatHistory', rows.reverse()); } catch (error) { console.error('Chat history error:', error); socket.emit('chatError', 'Unable to load chat history. Run the latest schema.sql migration.'); } });
+    socket.on('sendMessage', async (payload) => { const message = String(payload?.message || '').trim(); const songId = payload?.songId || null; const imagePath = typeof payload?.imagePath === 'string' && payload.imagePath.startsWith('/uploads/covers/') ? payload.imagePath : null; if ((!message && !songId && !imagePath) || message.length > 500) return socket.emit('chatError', 'Add a message, song, or image to share.'); if (!canSendChat(message, songId || imagePath)) return; try { const row = (await pool.query('INSERT INTO chat_messages (user_id, message, song_id, image_path) VALUES ($1, $2, $3, $4) RETURNING id, user_id, message, song_id, image_path, created_at', [socket.user.id, message, songId, imagePath])).rows[0]; const [songResult, senderResult] = await Promise.all([songId ? pool.query('SELECT title, artist, file_path, cover_path FROM songs WHERE id = $1', [songId]) : Promise.resolve({ rows: [] }), pool.query('SELECT avatar_path FROM users WHERE id = $1', [socket.user.id])]); const song = songResult.rows[0]; io.emit('newMessage', { ...row, username: socket.user.username, avatar_path: senderResult.rows[0]?.avatar_path, song_title: song?.title, song_artist: song?.artist, song_file_path: song?.file_path, song_cover_path: song?.cover_path }); } catch (error) { console.error('Chat send error:', error); socket.emit('chatError', 'Unable to send message. Run the latest schema.sql migration.'); } });
+    socket.on('toggleChatReaction', async (payload) => { const messageId = payload?.messageId; const emoji = String(payload?.emoji || ''); const allowed = ['👍', '😆', '😮', '😢', '😡', '❤️']; if (!messageId || !allowed.includes(emoji)) return socket.emit('chatError', 'Invalid reaction.'); try { const exists = await pool.query('SELECT 1 FROM chat_message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3', [messageId, socket.user.id, emoji]); if (exists.rows[0]) await pool.query('DELETE FROM chat_message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3', [messageId, socket.user.id, emoji]); else await pool.query('INSERT INTO chat_message_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)', [messageId, socket.user.id, emoji]); const reactions = (await pool.query('SELECT emoji, COUNT(*)::int AS count, BOOL_OR(user_id = $2) AS reacted_by_me FROM chat_message_reactions WHERE message_id = $1 GROUP BY emoji ORDER BY emoji', [messageId, socket.user.id])).rows; io.emit('chatReactionUpdated', { messageId: String(messageId), reactions }); } catch (error) { console.error('Reaction error:', error); socket.emit('chatError', 'Unable to update reaction. Run the latest schema.sql migration.'); } });
+    socket.on('requestDirectHistory', async (recipientId) => { if (socket.user.role !== 'ADMIN') return socket.emit('chatError', 'Private chat is available to administrators only.'); if (!recipientId || String(recipientId) === userId) return socket.emit('chatError', 'Choose another colleague.'); try { const rows = (await pool.query('SELECT dm.id, dm.sender_id, dm.recipient_id, dm.message, dm.song_id, dm.created_at, sender.username AS sender_name, recipient.username AS recipient_name, s.title AS song_title, s.artist AS song_artist, s.file_path AS song_file_path, s.cover_path AS song_cover_path FROM direct_messages dm JOIN users sender ON sender.id = dm.sender_id JOIN users recipient ON recipient.id = dm.recipient_id LEFT JOIN songs s ON s.id = dm.song_id WHERE (dm.sender_id = $1 AND dm.recipient_id = $2) OR (dm.sender_id = $2 AND dm.recipient_id = $1) ORDER BY dm.created_at ASC LIMIT 200', [socket.user.id, recipientId])).rows; socket.emit('directHistory', { recipientId: String(recipientId), messages: rows }); } catch (error) { console.error('Direct history error:', error); socket.emit('chatError', 'Unable to load private chat. Run the latest schema.sql migration.'); } });
+    socket.on('sendDirectMessage', async (payload) => { if (socket.user.role !== 'ADMIN') return socket.emit('chatError', 'Private chat is available to administrators only.'); const recipientId = payload?.recipientId; const message = String(payload?.message || '').trim(); const songId = payload?.songId || null; if (!recipientId || String(recipientId) === userId || (!message && !songId) || message.length > 500) return socket.emit('chatError', 'Add a message or a song and choose a colleague.'); try { const recipient = (await pool.query("SELECT id, username FROM users WHERE id = $1 AND status = 'APPROVED'", [recipientId])).rows[0]; if (!recipient) return socket.emit('chatError', 'Colleague not found.'); const row = (await pool.query('INSERT INTO direct_messages (sender_id, recipient_id, message, song_id) VALUES ($1, $2, $3, $4) RETURNING id, sender_id, recipient_id, message, song_id, created_at', [socket.user.id, recipientId, message, songId])).rows[0]; const song = songId ? (await pool.query('SELECT title, artist, file_path, cover_path FROM songs WHERE id = $1', [songId])).rows[0] : null; const outgoing = { ...row, sender_name: socket.user.username, recipient_name: recipient.username, song_title: song?.title, song_artist: song?.artist, song_file_path: song?.file_path, song_cover_path: song?.cover_path }; socket.emit('newDirectMessage', outgoing); const receiverSockets = socketsByUser.get(String(recipientId))?.socketIds || []; receiverSockets.forEach((id) => io.to(id).emit('newDirectMessage', outgoing)); } catch (error) { console.error('Direct chat send error:', error); socket.emit('chatError', 'Unable to send private message. Run the latest schema.sql migration.'); } });
     socket.on('nowListening', (song) => { const title = String(song?.title || '').trim(); const artist = String(song?.artist || '').trim(); listeningByUser.set(userId, title ? { title: title.slice(0, 100), artist: artist.slice(0, 100) } : null); emitPresence(); });
     socket.on('disconnect', () => { const active = socketsByUser.get(userId); active?.socketIds.delete(socket.id); if (!active?.socketIds.size) { socketsByUser.delete(userId); listeningByUser.delete(userId); } emitPresence(); });
 });

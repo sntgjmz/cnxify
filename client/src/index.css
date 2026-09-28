@@ -17,3 +17,24 @@ button { cursor: pointer; }
 .cnx-range { appearance: none; height: 4px; border-radius: 999px; background: #584365; accent-color: #f6c6d1; }
 .cnx-range::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; border-radius: 999px; background: #f6c6d1; box-shadow: 0 1px 5px rgba(0,0,0,.35); }
 .cnx-range::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 999px; background: #f6c6d1; }
+
+.cnx-page-title { font-size: clamp(1.85rem, 3vw, 2.6rem); font-weight: 900; letter-spacing: -0.055em; line-height: 1; }
+.cnx-kicker { color: #f6c6d1; font-size: .68rem; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
+.cnx-surface { border: 1px solid rgba(255,255,255,.1); border-radius: 1.5rem; background: rgba(255,255,255,.045); box-shadow: 0 18px 45px rgba(0,0,0,.16); }
+.cnx-card { border: 1px solid rgba(255,255,255,.07); border-radius: 1.1rem; background: rgba(255,255,255,.045); transition: transform .2s ease, background .2s ease, border-color .2s ease; }
+.cnx-card:hover { transform: translateY(-4px); border-color: rgba(246,198,209,.4); background: rgba(255,255,255,.08); }
+.cnx-empty { border: 1px dashed rgba(246,198,209,.35); border-radius: 1.25rem; background: rgba(246,198,209,.05); color: #c9bacf; }
+
+/* CNXify scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #8c708e #1a121f; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: #1a121f; border-radius: 999px; }
+*::-webkit-scrollbar-thumb { border: 3px solid #1a121f; border-radius: 999px; background: linear-gradient(180deg, #d8aab9, #8c708e); }
+*::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #f6c6d1, #b890bd); }
+
+@media (max-width: 760px) {
+  .cnx-sidebar { width: 68px; padding-inline: 8px; }
+  .cnx-sidebar .cnx-sidebar-label, .cnx-sidebar h3 { display: none; }
+  .cnx-sidebar nav button, .cnx-sidebar > div button { justify-content: center; padding-inline: 10px; }
+  .cnx-main { margin-left: 68px; }
+}
